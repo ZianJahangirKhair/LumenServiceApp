@@ -8,6 +8,21 @@ use Illuminate\Support\Facades\Validator;
 
 class PostsController extends Controller
 {
+    public function index(Request $request)
+    {
+        $posts = Post::OrderBy("id", "DESC")->paginate(2)->toArray();
+        $response = [
+            "total_count" => $posts["total"],
+            "limit" => $posts["per_page"],
+            "pagination" => [
+                "next_page" => $posts["next_page_url"],
+                "current_page" => $posts["current_page"]
+            ],
+            "data" => $posts["data"],
+        ];
+
+        return response()->json($response, 200);
+    }   
     private function getAccept(Request $request)
     {
         $accept = strtolower(trim(explode(';', (string) $request->header('Accept'))[0]));
@@ -62,46 +77,22 @@ class PostsController extends Controller
 
     public function store(Request $request)
     {
-        $acceptHeader = $request->header('Accept');
+        $input = $request->all();
+        $validationRules = [
+            'title' => 'required|min:5',
+            'content' => 'required|min:10',
+            'status' => 'required|in:draft,published',
+            'user_id' => 'required|exists:users,id'
+        ];
 
-        if ($acceptHeader === 'application/json' || $acceptHeader === 'application/xml') {
+        $validator = \Validator::make($input, $validationRules);
 
-            $contentTypeHeader = $request->header('Content-Type');
-
-            if ($contentTypeHeader === 'application/json') {
-
-                $this->validate($request, [
-                    'title'   => 'required|max:100',
-                    'content' => 'required',
-                    'status'  => 'in:draft,published',
-                    'user_id' => 'required|integer',
-                ]);
-
-                $input = $request->all();
-                $post = Post::create($input)->fresh();
-
-                if ($acceptHeader === 'application/json') {
-                    return response()->json($post, 201);
-                } else {
-                    // response xml
-                    $xml = new \SimpleXMLElement('<post/>');
-                    $xml->addChild('id', $post->id);
-                    $xml->addChild('title', htmlspecialchars($post->title));
-                    $xml->addChild('status', $post->status);
-                    $xml->addChild('content', htmlspecialchars($post->content));
-                    $xml->addChild('user_id', $post->user_id);
-                    $xml->addChild('created_at', $post->created_at);
-                    $xml->addChild('updated_at', $post->updated_at);
-
-                    return response($xml->asXML(), 201)
-                        ->header('Content-Type', 'application/xml');
-                }
-            } else {
-                return response('Unsupported Media Type', 415);
-            }
-        } else {
-            return response('Not Acceptable!', 406);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 400);
         }
+
+        $post = Post::create($input);
+        return response()->json($post,200);
     }
 
     public function getPublishedPosts()
@@ -156,59 +147,32 @@ class PostsController extends Controller
 
     public function update(Request $request, $id)
     {
-        $acceptHeader = $request->header('Accept');
+        $input = $request->all();
 
-        if ($acceptHeader === 'application/json' || $acceptHeader === 'application/xml') {
+        $post = Post::find($id);
 
-            $contentTypeHeader = $request->header('Content-Type');
-
-            if ($contentTypeHeader === 'application/json') {
-
-                $post = Post::find($id);
-
-                if (!$post) {
-                    if ($acceptHeader === 'application/json') {
-                        return response()->json(['message' => 'Post not found'], 404);
-                    } else {
-                        $xml = new \SimpleXMLElement('<error/>');
-                        $xml->addChild('message', 'Post not found');
-
-                        return response($xml->asXML(), 404)
-                            ->header('Content-Type', 'application/xml');
-                    }
-                }
-
-                $this->validate($request, [
-                    'title'   => 'max:100',
-                    'status'  => 'in:draft,published',
-                    'user_id' => 'integer',
-                ]);
-
-                $input = $request->all();
-                $post->fill($input);
-                $post->save();
-
-                if ($acceptHeader === 'application/json') {
-                    return response()->json($post, 200);
-                } else {
-                    $xml = new \SimpleXMLElement('<post/>');
-                    $xml->addChild('id', $post->id);
-                    $xml->addChild('title', htmlspecialchars($post->title));
-                    $xml->addChild('status', $post->status);
-                    $xml->addChild('content', htmlspecialchars($post->content));
-                    $xml->addChild('user_id', $post->user_id);
-                    $xml->addChild('created_at', $post->created_at);
-                    $xml->addChild('updated_at', $post->updated_at);
-
-                    return response($xml->asXML(), 200)
-                        ->header('Content-Type', 'application/xml');
-                }
-            } else {
-                return response('Unsupported Media Type', 415);
-            }
-        } else {
-            return response('Not Acceptable!', 406);
+        if(!$post) {
+            abort(404);
         }
+
+        //validation
+        $validationRules = [
+            'title' => 'required|min:5',
+            'content' => 'required|min:10',
+            'status' => 'required|in:draft,published',
+            'user_id' => 'required|exists:users,id'
+        ];
+
+        $validator = \Validator::make($input, $validationRules);
+
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 400);
+        }
+
+        $post->fill($input);
+        $post->save();
+
+        return response()->json($post, 200);
     }
 
     public function destroy(Request $request, $id)
