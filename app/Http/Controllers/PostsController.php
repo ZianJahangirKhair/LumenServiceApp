@@ -5,12 +5,13 @@ use App\Models\Comment;
 use App\Models\Post;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 
 class PostsController extends Controller
 {
     public function index(Request $request)
     {
-        $posts = Post::OrderBy("id", "DESC")->paginate(2)->toArray();
+        $posts = Post::Where(['user_id' => Auth::user()->id])->OrderBy("id", "DESC")->paginate(2)->toArray();
         $response = [
             "total_count" => $posts["total"],
             "limit" => $posts["per_page"],

@@ -57,6 +57,10 @@ class Handler extends ExceptionHandler
     {
         // return parent::render($request, $exception);
 
+        if ($exception instanceof ValidationException) {
+            return response()->json($exception->errors(), 422);
+        }
+        
         if (env('APP_DEBUG')) {
             return parent::render($request, $exception);
         }
